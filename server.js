@@ -118,10 +118,13 @@ app.get('/api/game-state', (req, res) => {
 app.post('/api/deposit', async (req, res) => {
     try {
         const { username, amount, code } = req.body;
-        users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ lại từ JSON
+        users = loadData(USERS_FILE, DEFAULT_ADMIN);
         if (!users[username]) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
-        deposits.push({ id: Date.now(), user: username, amount: parseInt(amount), code, status: 'Pending', time: new Date() });
+        // Đồng bộ danh sách nạp từ file trước khi thêm mới
+        const currentDeposits = loadData(DEPOSITS_FILE, []);
+        currentDeposits.push({ id: Date.now(), user: username, amount: parseInt(amount), code, status: 'Pending', time: new Date() });
+        deposits = currentDeposits;
         saveData(DEPOSITS_FILE, deposits);
         res.json({ success: true, message: "Yêu cầu nạp đã gửi! Vui lòng chờ Admin xác nhận." });
     } catch (e) { res.json({ success: false, message: "Lỗi hệ thống" }); }
@@ -138,9 +141,14 @@ app.post('/api/withdraw', async (req, res) => {
 
         if (user && user.balance >= amount) {
             user.balance -= parseInt(amount);
-            const req = { id: Date.now(), user: username, amount: parseInt(amount), bankName, accountNumber, accountHolder, status: 'Đang xử lý', time: new Date() };
-            user.withdrawHistory.unshift(req);
-            withdraws.push(req);
+            const reqWithdraw = { id: Date.now(), user: username, amount: parseInt(amount), bankName, accountNumber, accountHolder, status: 'Đang xử lý', time: new Date() };
+            user.withdrawHistory.unshift(reqWithdraw);
+
+            // Đồng bộ danh sách rút từ file trước khi thêm mới
+            const currentWithdraws = loadData(WITHDRAWS_FILE, []);
+            currentWithdraws.push(reqWithdraw);
+            withdraws = currentWithdraws;
+
             saveData(USERS_FILE, users);
             saveData(WITHDRAWS_FILE, withdraws);
             res.json({ success: true, balance: user.balance, withdrawHistory: user.withdrawHistory });
@@ -273,7 +281,7 @@ app.get('/api/admin/data', async (req, res) => {
     const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
     const currentDeposits = loadData(DEPOSITS_FILE, []);
     const currentWithdraws = loadData(WITHDRAWS_FILE, []);
-    res.json({ users: currentUsers, requests: currentDeposits.filter(d => d.status === 'Pending'), withdrawals: currentWithdraws });
+    res.json({ success: true, users: currentUsers, requests: currentDeposits.filter(d => d.status === 'Pending'), withdrawals: currentWithdraws });
 });
 
 app.post('/api/admin/action', async (req, res) => {
