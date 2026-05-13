@@ -134,6 +134,10 @@ window.onload = async () => {
             betHistory = res.user.betHistory || [];
             withdrawHistory = res.user.withdrawHistory || [];
             initGame();
+        } else {
+            // Nếu session không hợp lệ, xóa để cho phép đăng nhập lại
+            localStorage.removeItem('sunwin_session');
+            document.getElementById('authContainer').classList.remove('hidden');
         }
     }
 
