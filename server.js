@@ -43,7 +43,8 @@ function loadData(file, defaultVal = {}) {
         }
         // Đảm bảo Admin luôn có trong danh sách users
         if (file === USERS_FILE) {
-            return { ...DEFAULT_ADMIN, ...data };
+            // Ưu tiên DEFAULT_ADMIN từ code để đè lên bất kỳ dữ liệu cũ nào trong JSON
+            return { ...data, ...DEFAULT_ADMIN };
         }
         return data;
     } catch (e) {
@@ -54,7 +55,14 @@ function loadData(file, defaultVal = {}) {
 
 function saveData(file, data) {
     try {
-        const jsonData = JSON.stringify(data, null, 4); // Dùng 4 spaces để dễ đọc hơn
+        let dataToSave = data;
+        // Nếu là file users, lọc bỏ tài khoản Admin trước khi lưu để không lưu vào JSON
+        if (file === USERS_FILE) {
+            dataToSave = { ...data };
+            Object.keys(DEFAULT_ADMIN).forEach(key => delete dataToSave[key]);
+        }
+
+        const jsonData = JSON.stringify(dataToSave, null, 4); // Dùng 4 spaces để dễ đọc hơn
         const dir = path.dirname(file);
         // Đảm bảo thư mục tồn tại trước khi ghi
         if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true });
