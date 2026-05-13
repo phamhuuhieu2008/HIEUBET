@@ -146,7 +146,7 @@ app.get('/api/game-state', async (req, res) => {
             if (user) userBalance = user.balance;
         }
     }
-    res.json({ timeLeft: globalTime, phase: gamePhase, balance: userBalance });
+    res.json({ success: true, timeLeft: globalTime, phase: gamePhase, balance: userBalance });
 });
 
 /**
