@@ -121,6 +121,7 @@ setInterval(() => {
 app.get('/api/game-state', (req, res) => {
     const { username } = req.query;
     let userBalance = null;
+    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đảm bảo lấy số dư mới nhất
     if (username && users[username]) {
         // Lấy số dư trực tiếp từ bộ nhớ (đã được admin cập nhật khi duyệt)
         userBalance = users[username].balance;
@@ -207,6 +208,8 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/user/:username', (req, res) => {
+    // Đọc lại dữ liệu từ file để đảm bảo tìm thấy user khi người chơi quay lại web
+    users = loadData(USERS_FILE, DEFAULT_ADMIN);
     const user = users[req.params.username];
     if (user) res.json({ success: true, user: { ...user, username: req.params.username } });
     else res.json({ success: false, message: "User not found" });
@@ -218,6 +221,7 @@ app.get('/api/user/:username', (req, res) => {
 app.post('/api/update-profile', async (req, res) => {
     try {
         let { username, fullName, phone, avatar } = req.body;
+        users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi sửa
         const user = users[username];
         if (!user) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
@@ -244,6 +248,7 @@ app.post('/api/update-profile', async (req, res) => {
  */
 app.post('/api/place-bet', async (req, res) => {
     const { username, side, amount } = req.body;
+    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi trừ tiền
     const user = users[username];
     if (!user || user.balance < amount) return res.json({ success: false, message: "Lỗi đặt cược" });
 
@@ -256,6 +261,7 @@ app.post('/api/place-bet', async (req, res) => {
 
 app.post('/api/resolve-bet', async (req, res) => {
     const { username, betId } = req.body;
+    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi trả thưởng
     const user = users[username];
     if (!user) return res.json({ success: false, message: "User không tồn tại" });
 
@@ -305,8 +311,8 @@ app.post('/api/admin/action', async (req, res) => {
         if (idx !== -1 && users[currentDeposits[idx].user]) {
             users[currentDeposits[idx].user].balance += currentDeposits[idx].amount;
             currentDeposits[idx].status = 'Success';
-            deposits = currentDeposits; // Cập nhật lại biến toàn cục
-            saveData(USERS_FILE, users); saveData(DEPOSITS_FILE, deposits);
+            saveData(USERS_FILE, users);
+            saveData(DEPOSITS_FILE, currentDeposits);
             return res.json({ success: true });
         }
     } else if (type === 'approveWithdraw') {
@@ -320,12 +326,10 @@ app.post('/api/admin/action', async (req, res) => {
             if (req.status === 'Đang xử lý') req.status = 'Đang chuyển';
             else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; currentWithdraws.splice(idx, 1); }
 
-            withdraws = currentWithdraws; // Cập nhật lại biến toàn cục
-
             const hIdx = user.withdrawHistory.findIndex(h => h.id == reqId);
             if (hIdx !== -1) user.withdrawHistory[hIdx].status = req.status;
-            saveData(USERS_FILE, users); saveData(DEPOSITS_FILE, deposits); // Lưu cả nạp/rút nếu cần
-            saveData(WITHDRAWS_FILE, withdraws);
+            saveData(USERS_FILE, users);
+            saveData(WITHDRAWS_FILE, currentWithdraws);
             return res.json({ success: true });
         }
     } else if (type === 'lock') {
