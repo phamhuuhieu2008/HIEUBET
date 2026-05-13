@@ -138,22 +138,45 @@ window.onload = async () => {
     document.getElementById('bowl')?.addEventListener('click', function () { if (isOpening) this.classList.add('open'); });
 }
 
-let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0, currentBetId = null, isOpening = false;
+let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0, currentBetId = null, isOpening = false, lastPhase = 'betting';
 
 function startTimer() {
     if (timerInterval) clearInterval(timerInterval);
-    timeLeft = 40; isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null;
-    const btn = document.getElementById('playBtn');
-    btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
-    document.getElementById('btnLeft').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
-    document.getElementById('btnRight').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
-    document.getElementById('result').textContent = "";
-    ['dice1', 'dice2', 'dice3'].forEach(id => document.getElementById(id).style.transform = `rotateX(0deg) rotateY(0deg)`);
-    document.getElementById('bowl').classList.remove('open');
-    updateTimerDisplay();
-    timerInterval = setInterval(() => {
-        timeLeft--; updateTimerDisplay();
-        if (timeLeft <= 0) { clearInterval(timerInterval); autoOpenPlates(); }
+
+    timerInterval = setInterval(async () => {
+        const res = await fetchData('/api/game-state');
+        if (!res) return;
+
+        timeLeft = res.timeLeft;
+        const currentPhase = res.phase;
+
+        updateTimerDisplay();
+
+        // Nếu chuyển từ rolling sang betting (Vòng mới bắt đầu)
+        if (lastPhase === 'rolling' && currentPhase === 'betting') {
+            isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null;
+            const btn = document.getElementById('playBtn');
+            btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
+            document.getElementById('btnLeft').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+            document.getElementById('btnRight').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+            document.getElementById('result').textContent = "";
+            ['dice1', 'dice2', 'dice3'].forEach(id => document.getElementById(id).style.transform = `rotateX(0deg) rotateY(0deg)`);
+            document.getElementById('bowl').classList.remove('open');
+        }
+
+        // Nếu chuyển từ betting sang rolling (Hết thời gian đặt cược)
+        if (lastPhase === 'betting' && currentPhase === 'rolling') {
+            const btn = document.getElementById('playBtn');
+            btn.disabled = true; btn.textContent = "ĐANG MỞ BÁT...";
+            autoOpenPlates();
+        }
+
+        lastPhase = currentPhase;
+
+        if (currentPhase === 'rolling') {
+            const btn = document.getElementById('playBtn');
+            btn.disabled = true;
+        }
     }, 1000);
 }
 
@@ -412,13 +435,13 @@ async function renderAdminWithdrawList() {
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-blue-900/30 text-xs';
         const btnLabel = r.status === 'Đang xử lý' ? 'XÁC NHẬN' : 'HOÀN THÀNH';
         dv.innerHTML = `
-            <div>
-                <div class="font-bold text-blue-400">${r.user} - ${r.amount.toLocaleString()}đ</div>
-                <div class="text-[10px] text-gray-500">${r.bankName} | ${r.accountNumber}</div>
-            </div>
-            <div class="flex gap-1">
-                <button onclick="approveWithdraw('${r.id}')" class="text-green-400 font-bold">${btnLabel}</button>
-            </div>`;
+                <div>
+                    <div class="font-bold text-blue-400">${r.user} - ${r.amount.toLocaleString()}đ</div>
+                    <div class="text-[10px] text-gray-500">${r.bankName} | ${r.accountNumber}</div>
+                </div>
+                <div class="flex gap-1">
+                    <button onclick="approveWithdraw('${r.id}')" class="text-green-400 font-bold">${btnLabel}</button>
+                </div>`;
         el.appendChild(dv);
     });
 }
@@ -439,13 +462,13 @@ async function renderAdminUserList() {
         const dv = document.createElement('div');
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-zinc-800 text-xs';
         dv.innerHTML = `
-            <div>
-                <div class="font-bold ${usr.isLocked ? 'text-red-500' : 'text-white'}">${u}</div>
-                <div class="text-gray-500">${usr.balance.toLocaleString()}đ</div>
-            </div>
-            <button onclick="toggleLock('${u}', ${!usr.isLocked})" class="${usr.isLocked ? 'text-green-500' : 'text-red-500'}">
-                <i class="fa-solid ${usr.isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
-            </button>`;
+                <div>
+                    <div class="font-bold ${usr.isLocked ? 'text-red-500' : 'text-white'}">${u}</div>
+                    <div class="text-gray-500">${usr.balance.toLocaleString()}đ</div>
+                </div>
+                <button onclick="toggleLock('${u}', ${!usr.isLocked})" class="${usr.isLocked ? 'text-green-500' : 'text-red-500'}">
+                    <i class="fa-solid ${usr.isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
+                </button>`;
         el.appendChild(dv);
     });
 }
