@@ -103,7 +103,13 @@ setInterval(() => {
 }, 1000);
 
 app.get('/api/game-state', (req, res) => {
-    res.json({ timeLeft: globalTime, phase: gamePhase });
+    const { username } = req.query;
+    let userBalance = null;
+    if (username && users[username]) {
+        // Lấy số dư trực tiếp từ bộ nhớ (đã được admin cập nhật khi duyệt)
+        userBalance = users[username].balance;
+    }
+    res.json({ timeLeft: globalTime, phase: gamePhase, balance: userBalance });
 });
 
 /**
@@ -296,8 +302,9 @@ app.post('/api/admin/action', async (req, res) => {
         if (idx !== -1 && users[currentWithdraws[idx].user]) {
             const req = currentWithdraws[idx]; const user = users[req.user];
             if (req.status === 'Đang xử lý') req.status = 'Đang chuyển';
-            else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; withdraws.splice(idx, 1); }
-            else { withdraws = currentWithdraws; } // Cập nhật nếu có thay đổi khác
+            else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; currentWithdraws.splice(idx, 1); }
+
+            withdraws = currentWithdraws; // Cập nhật lại biến toàn cục
 
             const hIdx = user.withdrawHistory.findIndex(h => h.id == reqId);
             if (hIdx !== -1) user.withdrawHistory[hIdx].status = req.status;
