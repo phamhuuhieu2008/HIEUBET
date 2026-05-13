@@ -5,7 +5,7 @@ let withdrawHistory = [];
 
 // Trạng thái trò chơi toàn cục
 let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0;
-let currentBetId = null, isOpening = false, lastPhase = 'betting', resultFetched = false;
+let currentBetId = null, isOpening = false, lastPhase = null, resultFetched = false;
 let autoOpenTimeout = null;
 
 // BƯỚC QUAN TRỌNG: Thay link này bằng link "Web Service" Render cấp cho bạn
@@ -184,47 +184,42 @@ function startTimer() {
 
         updateTimerDisplay();
 
-        // Nếu chuyển từ rolling sang betting (Vòng mới bắt đầu)
-        if (lastPhase === 'rolling' && currentPhase === 'betting') {
-            if (autoOpenTimeout) {
-                clearTimeout(autoOpenTimeout);
-                autoOpenTimeout = null;
-            }
+        // Nhận diện chuyển pha (Phase Transition)
+        if (currentPhase !== lastPhase) {
+            if (currentPhase === 'betting') {
+                // Reset UI cho vòng cược mới
+                if (autoOpenTimeout) { clearTimeout(autoOpenTimeout); autoOpenTimeout = null; }
+                isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null; resultFetched = false;
 
-            isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null; resultFetched = false;
-            const btn = document.getElementById('playBtn');
-            btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
-            document.getElementById('btnLeft').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
-            document.getElementById('btnRight').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
-            document.getElementById('textXiu').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
-            document.getElementById('textTai').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
-            document.getElementById('result').textContent = "";
-            ['dice1', 'dice2', 'dice3'].forEach(id => document.getElementById(id).style.transform = `rotateX(0deg) rotateY(0deg)`);
-            document.getElementById('bowl').classList.remove('open');
-            document.getElementById('placedBetXiu').classList.add('hidden');
-            document.getElementById('placedBetTai').classList.add('hidden');
-            document.getElementById('currentBetXiu').classList.add('hidden');
-            document.getElementById('currentBetTai').classList.add('hidden');
-            document.getElementById('mainPlate').classList.remove('rolling'); // Dừng hiệu ứng lắc
+                const btn = document.getElementById('playBtn');
+                btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
+
+                document.getElementById('btnLeft').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+                document.getElementById('btnRight').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+                document.getElementById('textXiu').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+                document.getElementById('textTai').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+
+                document.getElementById('result').textContent = "";
+                ['dice1', 'dice2', 'dice3'].forEach(id => document.getElementById(id).style.transform = `rotateX(0deg) rotateY(0deg)`);
+                document.getElementById('bowl').classList.remove('open');
+                document.getElementById('placedBetXiu').classList.add('hidden');
+                document.getElementById('placedBetTai').classList.add('hidden');
+                document.getElementById('currentBetXiu').classList.add('hidden');
+                document.getElementById('currentBetTai').classList.add('hidden');
+                document.getElementById('mainPlate').classList.remove('rolling');
+            } else if (currentPhase === 'rolling') {
+                // Bắt đầu lắc đĩa và lấy kết quả
+                if (!isOpening) {
+                    isOpening = true;
+                    document.getElementById('mainPlate').classList.add('rolling');
+                }
+                if (!resultFetched) {
+                    resultFetched = true;
+                    setTimeout(() => sendResolveBetToServer(currentBetId), 1000);
+                }
+            }
+            lastPhase = currentPhase;
         }
-
-        // Nếu chuyển từ betting sang rolling (Hết thời gian đặt cược)
-        if (lastPhase === 'betting' && currentPhase === 'rolling') {
-            // Bắt đầu hiệu ứng lắc đĩa
-            if (!isOpening) {
-                isOpening = true;
-                const plate = document.getElementById('mainPlate');
-                plate.classList.add('rolling');
-            }
-            // Gọi API để lấy kết quả và mở bát cho tất cả người chơi
-            if (!resultFetched) {
-                resultFetched = true;
-                // Thêm một độ trễ nhỏ để hiệu ứng lắc có thời gian chạy trước khi mở bát
-                setTimeout(() => sendResolveBetToServer(currentBetId), 1000);
-            }
-        }
-
-        lastPhase = currentPhase;
     }, 1000);
 }
 
@@ -244,10 +239,11 @@ function selectSide(side) {
     const textXiu = document.getElementById('textXiu');
     const textTai = document.getElementById('textTai');
 
-    textXiu.className = side === 'left' ? 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]'
-        : 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
-    textTai.className = side === 'right' ? 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]'
-        : 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+    const activeCls = 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]';
+    const inactiveCls = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+
+    textXiu.className = side === 'left' ? activeCls : inactiveCls;
+    textTai.className = side === 'right' ? activeCls : inactiveCls;
 
     document.getElementById('btnLeft').className = side === 'left' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
     document.getElementById('btnRight').className = side === 'right' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
@@ -323,6 +319,13 @@ async function sendResolveBetToServer(bid) {
         balance = newBal; betHistory = newHist; updateBalanceDisplay();
 
         const winnerSide = (total >= 4 && total <= 10) ? 'left' : 'right';
+
+        // Hiển thị bên thắng bằng màu trắng, bên thua màu xám
+        const activeCls = 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]';
+        const inactiveCls = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+        document.getElementById('textXiu').className = winnerSide === 'left' ? activeCls : inactiveCls;
+        document.getElementById('textTai').className = winnerSide === 'right' ? activeCls : inactiveCls;
+
         const resultEl = document.getElementById('result');
         if (hasBet) {
             const lastBet = newHist.find(b => b.id === bid);
