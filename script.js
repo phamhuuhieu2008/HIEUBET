@@ -4,7 +4,7 @@ let betHistory = [];
 let withdrawHistory = [];
 
 // BƯỚC QUAN TRỌNG: Thay link này bằng link "Web Service" Render cấp cho bạn
-const PROD_API_URL = "https://hieubet-web-app.onrender.com";
+const PROD_API_URL = "https://hieubet.onrender.com";
 
 // Tự động nhận diện địa chỉ API
 const getApiUrl = () => {
@@ -97,6 +97,10 @@ async function handleLogin() {
         withdrawHistory = res.user.withdrawHistory || [];
         localStorage.setItem('sunwin_session', currentUser);
         initGame();
+
+        if (currentUser === '0708069602') {
+            showToast("👑 Chào mừng Admin quay trở lại!");
+        }
     } else { showToast(res.message, "error"); }
 }
 
@@ -127,10 +131,6 @@ window.onload = async () => {
             initGame();
         }
     }
-
-    // Tự động điền tài khoản Admin để tiện sử dụng
-    if (document.getElementById('loginUser')) document.getElementById('loginUser').value = '0708069602';
-    if (document.getElementById('loginPass')) document.getElementById('loginPass').value = '0708069602';
 
     document.getElementById('betAmount')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
 
@@ -366,8 +366,9 @@ function renderHistory() {
 
 async function renderAdminDepositList() {
     const d = await fetchData('/api/admin/data');
+    if (!d || !d.success) return;
     const el = document.getElementById('adminDepositList');
-    el.innerHTML = d.requests.length ? '' : '<p class="text-gray-500 text-xs italic">Trống</p>';
+    el.innerHTML = d.requests && d.requests.length ? '' : '<p class="text-gray-500 text-xs italic">Trống</p>';
     d.requests.forEach(r => {
         const dv = document.createElement('div');
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-red-900/30 text-xs';
@@ -395,8 +396,9 @@ function setAdminResult(mode) {
 
 async function renderAdminWithdrawList() {
     const d = await fetchData('/api/admin/data');
+    if (!d || !d.success) return;
     const el = document.getElementById('adminWithdrawList');
-    el.innerHTML = d.withdrawals.length ? '' : '<p class="text-gray-500 text-xs italic">Trống</p>';
+    el.innerHTML = d.withdrawals && d.withdrawals.length ? '' : '<p class="text-gray-500 text-xs italic">Trống</p>';
     d.withdrawals.forEach(r => {
         const dv = document.createElement('div');
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-blue-900/30 text-xs';
@@ -420,9 +422,10 @@ async function approveWithdraw(id) {
 
 async function renderAdminUserList() {
     const d = await fetchData('/api/admin/data');
+    if (!d || !d.success) return;
     const el = document.getElementById('adminUserList');
     el.innerHTML = '';
-    Object.keys(d.users).forEach(u => {
+    if (d.users) Object.keys(d.users).forEach(u => {
         if (u === '0708069602') return;
         const usr = d.users[u];
         const dv = document.createElement('div');
