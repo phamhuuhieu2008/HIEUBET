@@ -66,10 +66,6 @@ function loadData(file, defaultVal = {}) {
             const content = fsSync.readFileSync(file, 'utf8').trim();
             const data = content ? JSON.parse(content) : defaultVal;
 
-            // Đảm bảo Admin luôn có trong danh sách users khi load từ file
-            if (file === USERS_FILE) {
-                return { ...data, ...DEFAULT_ADMIN };
-            }
             return data;
         }
         return defaultVal;
@@ -84,8 +80,6 @@ function saveData(file, data) {
         let dataToSave = data;
         // Nếu là file users, lọc bỏ tài khoản Admin trước khi lưu để không lưu vào JSON
         if (file === USERS_FILE) {
-            dataToSave = { ...data };
-            Object.keys(DEFAULT_ADMIN).forEach(key => delete dataToSave[key]);
         }
 
         const jsonData = JSON.stringify(dataToSave, null, 4); // Dùng 4 spaces để dễ đọc hơn
@@ -239,7 +233,7 @@ app.post('/api/login', async (req, res) => {
 
     if (user && user.password === password) {
         if (user.isLocked) return res.json({ success: false, message: "Tài khoản bị khóa!" });
-        res.json({ success: true, user: { ...user, username } });
+        res.json({ success: true, user: { ...user.toObject(), username } });
     } else {
         res.json({ success: false, message: "Sai tài khoản hoặc mật khẩu!" });
     }
