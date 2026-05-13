@@ -119,7 +119,6 @@ function initGame() {
     } else {
         document.getElementById('adminBtn').classList.add('hidden');
     }
-    startTimer();
 }
 
 function handleLogout() { localStorage.removeItem('sunwin_session'); location.reload(); }
@@ -141,8 +140,11 @@ window.onload = async () => {
         }
     }
 
-    document.getElementById('betAmount')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    // Chạy Timer ngay lập tức khi load trang
+    startTimer();
 
+    document.getElementById('betAmount')?.addEventListener('input', updateBetPreview);
+    document.getElementById('betAmount')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); placeBet(); } });
     document.getElementById('playBtn')?.addEventListener('click', (e) => { e.preventDefault(); placeBet(); });
 
     document.getElementById('bowl')?.addEventListener('click', function () {
@@ -196,6 +198,8 @@ function startTimer() {
             document.getElementById('bowl').classList.remove('open');
             document.getElementById('placedBetXiu').classList.add('hidden');
             document.getElementById('placedBetTai').classList.add('hidden');
+            document.getElementById('currentBetXiu').classList.add('hidden');
+            document.getElementById('currentBetTai').classList.add('hidden');
             document.getElementById('mainPlate').classList.remove('rolling'); // Dừng hiệu ứng lắc
         }
 
@@ -242,6 +246,21 @@ function selectSide(side) {
 
     document.getElementById('btnLeft').className = side === 'left' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
     document.getElementById('btnRight').className = side === 'right' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+
+    updateBetPreview();
+}
+
+function updateBetPreview() {
+    if (hasBet || isOpening) return;
+    const amount = parseInt(document.getElementById('betAmount').value) || 0;
+    const previewXiu = document.getElementById('currentBetXiu');
+    const previewTai = document.getElementById('currentBetTai');
+
+    previewXiu.classList.toggle('hidden', selectedSide !== 'left' || amount <= 0);
+    previewTai.classList.toggle('hidden', selectedSide !== 'right' || amount <= 0);
+
+    if (selectedSide === 'left') previewXiu.textContent = `${amount.toLocaleString()}đ`;
+    if (selectedSide === 'right') previewTai.textContent = `${amount.toLocaleString()}đ`;
 }
 
 async function placeBet() {
@@ -258,6 +277,8 @@ async function placeBet() {
         const sideEl = selectedSide === 'left' ? 'placedBetXiu' : 'placedBetTai';
         document.getElementById(sideEl).textContent = `${amount.toLocaleString()}đ`;
         document.getElementById(sideEl).classList.remove('hidden');
+        document.getElementById('currentBetXiu').classList.add('hidden');
+        document.getElementById('currentBetTai').classList.add('hidden');
         showToast("✅ Đặt cược thành công!");
     } else { hasBet = false; showToast(res.message, "error"); }
 }
