@@ -275,22 +275,34 @@ app.post('/api/admin/action', async (req, res) => {
     if (type === 'setResult') { nextResultOverride = mode; return res.json({ success: true }); }
 
     if (type === 'approveDeposit') {
-        const idx = deposits.findIndex(r => r.id == reqId);
-        if (idx !== -1 && users[deposits[idx].user]) {
-            users[deposits[idx].user].balance += deposits[idx].amount;
-            deposits[idx].status = 'Success';
+        // Đồng bộ lại dữ liệu từ file trước khi duyệt để đảm bảo ID yêu cầu tồn tại
+        users = loadData(USERS_FILE, DEFAULT_ADMIN);
+        const currentDeposits = loadData(DEPOSITS_FILE, []);
+
+        const idx = currentDeposits.findIndex(r => r.id == reqId);
+        if (idx !== -1 && users[currentDeposits[idx].user]) {
+            users[currentDeposits[idx].user].balance += currentDeposits[idx].amount;
+            currentDeposits[idx].status = 'Success';
+            deposits = currentDeposits; // Cập nhật lại biến toàn cục
             saveData(USERS_FILE, users); saveData(DEPOSITS_FILE, deposits);
             return res.json({ success: true });
         }
     } else if (type === 'approveWithdraw') {
-        const idx = withdraws.findIndex(r => r.id == reqId);
-        if (idx !== -1 && users[withdraws[idx].user]) {
-            const req = withdraws[idx]; const user = users[req.user];
+        // Tương tự cho rút tiền
+        users = loadData(USERS_FILE, DEFAULT_ADMIN);
+        const currentWithdraws = loadData(WITHDRAWS_FILE, []);
+
+        const idx = currentWithdraws.findIndex(r => r.id == reqId);
+        if (idx !== -1 && users[currentWithdraws[idx].user]) {
+            const req = currentWithdraws[idx]; const user = users[req.user];
             if (req.status === 'Đang xử lý') req.status = 'Đang chuyển';
             else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; withdraws.splice(idx, 1); }
+            else { withdraws = currentWithdraws; } // Cập nhật nếu có thay đổi khác
+
             const hIdx = user.withdrawHistory.findIndex(h => h.id == reqId);
             if (hIdx !== -1) user.withdrawHistory[hIdx].status = req.status;
-            saveData(USERS_FILE, users); saveData(WITHDRAWS_FILE, withdraws);
+            saveData(USERS_FILE, users); saveData(DEPOSITS_FILE, deposits); // Lưu cả nạp/rút nếu cần
+            saveData(WITHDRAWS_FILE, withdraws);
             return res.json({ success: true });
         }
     } else if (type === 'lock') {
