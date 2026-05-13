@@ -3,6 +3,11 @@ let balance = 0;
 let betHistory = [];
 let withdrawHistory = [];
 
+// Trạng thái trò chơi toàn cục
+let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0;
+let currentBetId = null, isOpening = false, lastPhase = 'betting', resultFetched = false;
+let autoOpenTimeout = null;
+
 // BƯỚC QUAN TRỌNG: Thay link này bằng link "Web Service" Render cấp cho bạn
 const PROD_API_URL = "https://hieubet.onrender.com"; // <-- Kiểm tra kỹ link này trên Render Dashboard
 
@@ -135,10 +140,17 @@ window.onload = async () => {
     document.getElementById('betAmount')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
 
     document.getElementById('playBtn')?.addEventListener('click', (e) => { e.preventDefault(); placeBet(); });
-    document.getElementById('bowl')?.addEventListener('click', function () { if (isOpening) this.classList.add('open'); });
-}
 
-let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0, currentBetId = null, isOpening = false, lastPhase = 'betting', resultFetched = false;
+    document.getElementById('bowl')?.addEventListener('click', function () {
+        if (isOpening) {
+            this.classList.add('open');
+            if (autoOpenTimeout) {
+                clearTimeout(autoOpenTimeout);
+                autoOpenTimeout = null;
+            }
+        }
+    });
+}
 
 function startTimer() {
     if (timerInterval) clearInterval(timerInterval);
@@ -163,6 +175,11 @@ function startTimer() {
 
         // Nếu chuyển từ rolling sang betting (Vòng mới bắt đầu)
         if (lastPhase === 'rolling' && currentPhase === 'betting') {
+            if (autoOpenTimeout) {
+                clearTimeout(autoOpenTimeout);
+                autoOpenTimeout = null;
+            }
+
             isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null;
             const btn = document.getElementById('playBtn');
             btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
@@ -247,7 +264,16 @@ async function sendResolveBetToServer(bid) {
             else if (v === 4) { rX = 90; rY = 0; } else if (v === 5) { rX = 0; rY = 90; } else if (v === 6) { rX = 0; rY = 180; }
             document.getElementById(`dice${i + 1}`).style.transform = `rotateX(${rX + 720}deg) rotateY(${rY + 720}deg)`;
         });
-        setTimeout(() => document.getElementById('bowl').classList.add('open'), 500);
+
+        // Thiết lập tự động mở bát sau 5 giây nếu người dùng không nhấn
+        autoOpenTimeout = setTimeout(() => {
+            const bowl = document.getElementById('bowl');
+            if (bowl && !bowl.classList.contains('open')) {
+                bowl.classList.add('open');
+            }
+            autoOpenTimeout = null;
+        }, 5000);
+
         balance = newBal; betHistory = newHist; updateBalanceDisplay();
 
         const winnerSide = (total >= 4 && total <= 10) ? 'left' : 'right';
