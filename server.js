@@ -36,17 +36,17 @@ oldFiles.forEach(file => {
 
 function loadData(file, defaultVal = {}) {
     try {
-        let data = defaultVal;
         if (fsSync.existsSync(file)) {
-            const content = fsSync.readFileSync(file, 'utf8');
-            data = content ? JSON.parse(content) : defaultVal;
+            const content = fsSync.readFileSync(file, 'utf8').trim();
+            const data = content ? JSON.parse(content) : defaultVal;
+
+            // Đảm bảo Admin luôn có trong danh sách users khi load từ file
+            if (file === USERS_FILE) {
+                return { ...data, ...DEFAULT_ADMIN };
+            }
+            return data;
         }
-        // Đảm bảo Admin luôn có trong danh sách users
-        if (file === USERS_FILE) {
-            // Ưu tiên DEFAULT_ADMIN từ code để đè lên bất kỳ dữ liệu cũ nào trong JSON
-            return { ...data, ...DEFAULT_ADMIN };
-        }
-        return data;
+        return defaultVal;
     } catch (e) {
         console.error(`Lỗi đọc file ${file}:`, e.message);
         return defaultVal;
@@ -63,11 +63,16 @@ function saveData(file, data) {
         }
 
         const jsonData = JSON.stringify(dataToSave, null, 4); // Dùng 4 spaces để dễ đọc hơn
-        const dir = path.dirname(file);
-        // Đảm bảo thư mục tồn tại trước khi ghi
-        if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true });
-        fsSync.writeFileSync(file, jsonData, 'utf8');
-    } catch (e) { console.error(`Lỗi ghi file ${file}:`, e.message); }
+
+        // Ghi vào một file tạm trước, sau đó rename để đảm bảo tính nguyên tử (Atomic write)
+        // Việc này giúp file JSON không bao giờ bị trống nếu server sập giữa chừng
+        const tempFile = `${file}.tmp`;
+        fsSync.writeFileSync(tempFile, jsonData, 'utf8');
+        fsSync.renameSync(tempFile, file);
+
+    } catch (e) {
+        console.error(`❌ Lỗi nghiêm trọng khi ghi file ${file}:`, e.message);
+    }
 }
 
 const DEFAULT_ADMIN = {
