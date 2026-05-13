@@ -254,6 +254,14 @@ function loadProfileData() {
     });
 }
 
+async function refreshAdminData() {
+    const btn = document.querySelector('#adminModal .fa-rotate');
+    if (btn) btn.classList.add('fa-spin');
+    await Promise.all([renderAdminDepositList(), renderAdminUserList(), renderAdminWithdrawList()]);
+    if (btn) btn.classList.remove('fa-spin');
+    showToast("🔄 Đã cập nhật dữ liệu mới nhất");
+}
+
 function showTransferInfo() {
     const amount = document.getElementById('depositAmount').value;
     if (!amount || amount < 10000) return showToast("Số tiền tối thiểu 10,000đ", "error");
