@@ -34,6 +34,20 @@ const userSchema = new mongoose.Schema({
     withdrawHistory: { type: Array, default: [] }
 }, { timestamps: true });
 
+// Thêm một phương thức để chuyển đổi Mongoose Document thành Object thuần túy
+// Điều này cần thiết vì Mongoose Document có nhiều thuộc tính ẩn không cần thiết khi gửi về client
+userSchema.methods.toObject = function () {
+    const obj = mongoose.Document.prototype.toObject.apply(this, arguments);
+    // Xóa các trường không cần thiết hoặc nhạy cảm trước khi gửi về client
+    delete obj.password;
+    delete obj.__v;
+    delete obj._id; // Giữ lại _id nếu cần, nhưng thường client không cần
+    delete obj.createdAt;
+    delete obj.updatedAt;
+    return obj;
+};
+
+
 const User = mongoose.model('User', userSchema);
 
 const DEFAULT_ADMIN_DATA = {
@@ -41,7 +55,6 @@ const DEFAULT_ADMIN_DATA = {
 };
 
 // --- QUẢN LÝ CƠ SỞ DỮ LIỆU JSON ---
-const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const DEPOSITS_FILE = path.join(DATA_DIR, 'deposits.json');
 const WITHDRAWS_FILE = path.join(DATA_DIR, 'withdraws.json');
@@ -65,8 +78,6 @@ function loadData(file, defaultVal = {}) {
         if (fsSync.existsSync(file)) {
             const content = fsSync.readFileSync(file, 'utf8').trim();
             const data = content ? JSON.parse(content) : defaultVal;
-
-            return data;
         }
         return defaultVal;
     } catch (e) {
@@ -78,9 +89,6 @@ function loadData(file, defaultVal = {}) {
 function saveData(file, data) {
     try {
         let dataToSave = data;
-        // Nếu là file users, lọc bỏ tài khoản Admin trước khi lưu để không lưu vào JSON
-        if (file === USERS_FILE) {
-        }
 
         const jsonData = JSON.stringify(dataToSave, null, 4); // Dùng 4 spaces để dễ đọc hơn
 
@@ -165,7 +173,7 @@ app.post('/api/deposit', async (req, res) => {
         if (!userExists) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
         // Đồng bộ danh sách nạp từ file trước khi thêm mới
-        const currentDeposits = loadData(DEPOSITS_FILE, []);
+        const currentDeposits = loadData(DEPOSITS_FILE, []); // Vẫn dùng JSON cho deposits
         currentDeposits.push({ id: Date.now(), user: username, amount: parseInt(amount), code, status: 'Pending', time: new Date() });
         deposits = currentDeposits;
         saveData(DEPOSITS_FILE, deposits);
@@ -188,7 +196,7 @@ app.post('/api/withdraw', async (req, res) => {
             const reqWithdraw = { id: Date.now(), user: username, amount: parseInt(amount), bankName, accountNumber, accountHolder, status: 'Đang xử lý', time: new Date() };
             user.withdrawHistory.unshift(reqWithdraw);
 
-            // Đồng bộ danh sách rút từ file trước khi thêm mới
+            // Đồng bộ danh sách rút từ file trước khi thêm mới (vẫn dùng JSON cho withdraws)
             const currentWithdraws = loadData(WITHDRAWS_FILE, []);
             currentWithdraws.push(reqWithdraw);
             withdraws = currentWithdraws;
@@ -233,7 +241,7 @@ app.post('/api/login', async (req, res) => {
 
     if (user && user.password === password) {
         if (user.isLocked) return res.json({ success: false, message: "Tài khoản bị khóa!" });
-        res.json({ success: true, user: { ...user.toObject(), username } });
+        res.json({ success: true, user: user.toObject() });
     } else {
         res.json({ success: false, message: "Sai tài khoản hoặc mật khẩu!" });
     }
@@ -245,8 +253,8 @@ app.get('/api/user/:username', async (req, res) => {
         return res.json({ success: true, user: { ...DEFAULT_ADMIN_DATA } });
     }
 
-    const user = await User.findOne({ username });
-    if (user) res.json({ success: true, user: { ...user.toObject(), username } });
+    const user = await User.findOne({ username }); // Tìm user trong MongoDB
+    if (user) res.json({ success: true, user: user.toObject() });
     else res.json({ success: false, message: "User not found" });
 });
 app.post('/api/update-profile', async (req, res) => {
@@ -254,7 +262,7 @@ app.post('/api/update-profile', async (req, res) => {
         let { username, fullName, phone, avatar } = req.body;
         if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Admin không cần cập nhật profile" });
 
-        const user = await User.findOne({ username });
+        const user = await User.findOne({ username }); // Tìm user trong MongoDB
         if (!user) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
         // Validation cơ bản
@@ -282,7 +290,7 @@ app.post('/api/place-bet', async (req, res) => {
     const { username, side, amount } = req.body;
     if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Admin không được cược" });
 
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }); // Tìm user trong MongoDB
     if (!user || user.balance < amount) return res.json({ success: false, message: "Lỗi đặt cược" });
 
     const betId = Date.now();
@@ -296,7 +304,7 @@ app.post('/api/resolve-bet', async (req, res) => {
     const { username, betId } = req.body;
     if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: true, dice: currentResult.dice, total: currentResult.total });
 
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }); // Tìm user trong MongoDB
     if (!user) return res.json({ success: false, message: "User không tồn tại" });
 
     const { dice, total } = currentResult;
@@ -324,7 +332,7 @@ app.post('/api/resolve-bet', async (req, res) => {
  */
 app.get('/api/admin/data', async (req, res) => {
     const dbUsers = await User.find({});
-    const usersMap = {};
+    const usersMap = {}; // Tạo một map để dễ dàng truy cập user bằng username
     dbUsers.forEach(u => usersMap[u.username] = u.toObject());
     usersMap[DEFAULT_ADMIN_DATA.username] = DEFAULT_ADMIN_DATA;
 
@@ -341,7 +349,7 @@ app.post('/api/admin/action', async (req, res) => {
         const currentDeposits = loadData(DEPOSITS_FILE, []);
         const idx = currentDeposits.findIndex(r => r.id == reqId);
         if (idx !== -1) {
-            const username = currentDeposits[idx].user;
+            const username = currentDeposits[idx].user; // Lấy username từ yêu cầu nạp tiền
             const user = await User.findOne({ username });
             if (user) {
                 user.balance += currentDeposits[idx].amount;
@@ -357,7 +365,7 @@ app.post('/api/admin/action', async (req, res) => {
         const currentWithdraws = loadData(WITHDRAWS_FILE, []);
         const idx = currentWithdraws.findIndex(r => r.id == reqId);
         if (idx !== -1) {
-            const username = currentWithdraws[idx].user;
+            const username = currentWithdraws[idx].user; // Lấy username từ yêu cầu rút tiền
             const user = await User.findOne({ username });
             if (user) {
                 const req = currentWithdraws[idx];
@@ -375,7 +383,7 @@ app.post('/api/admin/action', async (req, res) => {
     }
 
     if (type === 'lock') {
-        const user = await User.findOne({ username: target });
+        const user = await User.findOne({ username: target }); // Tìm user trong MongoDB
         if (user) { user.isLocked = value; await user.save(); return res.json({ success: true }); }
     }
 
