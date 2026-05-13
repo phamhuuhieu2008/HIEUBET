@@ -138,7 +138,7 @@ window.onload = async () => {
     document.getElementById('bowl')?.addEventListener('click', function () { if (isOpening) this.classList.add('open'); });
 }
 
-let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0, currentBetId = null, isOpening = false, lastPhase = 'betting';
+let timeLeft = 40, timerInterval = null, hasBet = false, sideBet = null, amountBet = 0, currentBetId = null, isOpening = false, lastPhase = 'betting', resultFetched = false;
 
 function startTimer() {
     if (timerInterval) clearInterval(timerInterval);
@@ -146,7 +146,7 @@ function startTimer() {
     timerInterval = setInterval(async () => {
         // Gửi kèm username để server trả về số dư mới nhất
         const res = await fetchData(`/api/game-state?username=${currentUser}`);
-        if (!res) return;
+        if (!res || !res.success) return; // Đảm bảo API trả về thành công
 
         // Tự động cập nhật số dư nếu Admin vừa duyệt nạp tiền
         if (res.balance !== null && res.balance !== balance) {
@@ -173,21 +173,25 @@ function startTimer() {
             document.getElementById('bowl').classList.remove('open');
             document.getElementById('placedBetXiu').classList.add('hidden');
             document.getElementById('placedBetTai').classList.add('hidden');
+            document.getElementById('mainPlate').classList.remove('rolling'); // Dừng hiệu ứng lắc
         }
 
         // Nếu chuyển từ betting sang rolling (Hết thời gian đặt cược)
         if (lastPhase === 'betting' && currentPhase === 'rolling') {
-            const btn = document.getElementById('playBtn');
-            btn.disabled = true; btn.textContent = "ĐANG MỞ BÁT...";
-            autoOpenPlates();
+            // Bắt đầu hiệu ứng lắc đĩa
+            if (!isOpening) {
+                isOpening = true;
+                document.getElementById('mainPlate').classList.add('rolling');
+            }
+            // Gọi API để lấy kết quả và mở bát cho tất cả người chơi
+            if (!resultFetched) {
+                resultFetched = true;
+                // Thêm một độ trễ nhỏ để hiệu ứng lắc có thời gian chạy trước khi mở bát
+                setTimeout(() => sendResolveBetToServer(currentBetId), 1000);
+            }
         }
 
         lastPhase = currentPhase;
-
-        if (currentPhase === 'rolling') {
-            const btn = document.getElementById('playBtn');
-            btn.disabled = true;
-        }
     }, 1000);
 }
 
