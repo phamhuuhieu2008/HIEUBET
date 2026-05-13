@@ -184,11 +184,13 @@ function startTimer() {
                 autoOpenTimeout = null;
             }
 
-            isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null;
+            isOpening = false; hasBet = false; sideBet = null; selectedSide = null; currentBetId = null; resultFetched = false;
             const btn = document.getElementById('playBtn');
             btn.disabled = false; btn.textContent = "ĐẶT CƯỢC"; btn.classList.remove('opacity-50');
             document.getElementById('btnLeft').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
             document.getElementById('btnRight').className = 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
+            document.getElementById('textXiu').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+            document.getElementById('textTai').className = 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
             document.getElementById('result').textContent = "";
             ['dice1', 'dice2', 'dice3'].forEach(id => document.getElementById(id).style.transform = `rotateX(0deg) rotateY(0deg)`);
             document.getElementById('bowl').classList.remove('open');
@@ -228,6 +230,16 @@ function selectSide(side) {
     const input = document.getElementById('betAmount');
     let currentBet = parseInt(input.value) || 10000;
     selectedSide = side;
+
+    // Làm nổi bật chữ XỈU / TÀI khi người chơi chọn
+    const textXiu = document.getElementById('textXiu');
+    const textTai = document.getElementById('textTai');
+
+    textXiu.className = side === 'left' ? 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]'
+        : 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+    textTai.className = side === 'right' ? 'text-3xl font-black text-white transition-all duration-500 flex flex-col items-center drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]'
+        : 'text-3xl font-black text-gray-700 transition-all duration-500 flex flex-col items-center';
+
     document.getElementById('btnLeft').className = side === 'left' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
     document.getElementById('btnRight').className = side === 'right' ? 'bet-button active py-4 rounded-2xl font-black text-xl text-yellow-400' : 'bet-button py-4 rounded-2xl font-black text-xl text-gray-400';
 }
@@ -293,8 +305,6 @@ async function sendResolveBetToServer(bid) {
         } else {
             resultEl.innerHTML = `<span class="text-yellow-400 font-bold">TỔNG: ${total}</span>`;
         }
-
-        setTimeout(startTimer, 5000);
     }
 }
 
