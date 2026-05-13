@@ -71,7 +71,7 @@ function saveData(file, data) {
 }
 
 const DEFAULT_ADMIN = {
-    "0708069602": { password: "admin", balance: 99999999, isLocked: false, betHistory: [], withdrawHistory: [] }
+    "0708069602": { password: "0708069602", balance: 99999999, isLocked: false, betHistory: [], withdrawHistory: [] }
 };
 let users = loadData(USERS_FILE, DEFAULT_ADMIN);
 let deposits = loadData(DEPOSITS_FILE, []);
@@ -123,6 +123,9 @@ app.post('/api/register', async (req, res) => {
         const { username, password } = req.body;
         if (!username || !password) return res.json({ success: false, message: "Thiếu thông tin!" });
 
+        // Ngăn chặn việc đăng ký trùng với tài khoản Admin cố định
+        if (DEFAULT_ADMIN[username]) return res.json({ success: false, message: "Tài khoản Admin đã tồn tại!" });
+
         // Đọc lại từ file để đảm bảo không trùng lặp dữ liệu mới nhất
         const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
         if (currentUsers[username]) return res.json({ success: false, message: "Tài khoản đã tồn tại!" });
@@ -137,11 +140,12 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
+    users = currentUsers; // Đồng bộ bộ nhớ tạm từ file JSON và Admin cố định
     const user = currentUsers[username];
 
     if (user && user.password === password) {
         if (user.isLocked) return res.json({ success: false, message: "Tài khoản bị khóa!" });
-        res.json({ success: true, user: { username, balance: user.balance, betHistory: user.betHistory, withdrawHistory: user.withdrawHistory } });
+        res.json({ success: true, user: { ...user, username } });
     } else { res.json({ success: false, message: "Sai tài khoản hoặc mật khẩu!" }); }
 });
 
