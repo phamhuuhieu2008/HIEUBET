@@ -4,7 +4,7 @@ let betHistory = [];
 let withdrawHistory = [];
 
 // BƯỚC QUAN TRỌNG: Thay link này bằng link "Web Service" Render cấp cho bạn
-const PROD_API_URL = "https://hieubet.onrender.com";
+const PROD_API_URL = "https://hieubet.onrender.com"; // <-- Kiểm tra kỹ link này trên Render Dashboard
 
 // Tự động nhận diện địa chỉ API
 const getApiUrl = () => {
@@ -29,7 +29,7 @@ const API_URL = getApiUrl();
 async function fetchData(endpoint, options = {}) {
     const url = `${API_URL}${endpoint}`;
     console.log(`📡 Đang gọi API: ${url}`);
-    return fetch(`${API_URL}${endpoint}`, {
+    return fetch(url, {
         method: options.method || 'GET',
         headers: { 'Content-Type': 'application/json' },
         body: options.body ? JSON.stringify(options.body) : null
