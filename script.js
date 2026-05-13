@@ -198,7 +198,8 @@ function startTimer() {
             // Bắt đầu hiệu ứng lắc đĩa
             if (!isOpening) {
                 isOpening = true;
-                document.getElementById('mainPlate').classList.add('rolling');
+                const plate = document.getElementById('mainPlate');
+                plate.classList.add('rolling');
             }
             // Gọi API để lấy kết quả và mở bát cho tất cả người chơi
             if (!resultFetched) {
@@ -479,13 +480,13 @@ async function renderAdminWithdrawList() {
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-blue-900/30 text-xs';
         const btnLabel = r.status === 'Đang xử lý' ? 'XÁC NHẬN' : 'HOÀN THÀNH';
         dv.innerHTML = `
-                    <div>
-                        <div class="font-bold text-blue-400">${r.user} - ${r.amount.toLocaleString()}đ</div>
-                        <div class="text-[10px] text-gray-500">${r.bankName} | ${r.accountNumber}</div>
-                    </div>
-                    <div class="flex gap-1">
-                        <button onclick="approveWithdraw('${r.id}')" class="text-green-400 font-bold">${btnLabel}</button>
-                    </div>`;
+                        <div>
+                            <div class="font-bold text-blue-400">${r.user} - ${r.amount.toLocaleString()}đ</div>
+                            <div class="text-[10px] text-gray-500">${r.bankName} | ${r.accountNumber}</div>
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="approveWithdraw('${r.id}')" class="text-green-400 font-bold">${btnLabel}</button>
+                        </div>`;
         el.appendChild(dv);
     });
 }
@@ -506,13 +507,13 @@ async function renderAdminUserList() {
         const dv = document.createElement('div');
         dv.className = 'bg-black p-3 rounded-xl flex justify-between border border-zinc-800 text-xs';
         dv.innerHTML = `
-                    <div>
-                        <div class="font-bold ${usr.isLocked ? 'text-red-500' : 'text-white'}">${u}</div>
-                        <div class="text-gray-500">${usr.balance.toLocaleString()}đ</div>
-                    </div>
-                    <button onclick="toggleLock('${u}', ${!usr.isLocked})" class="${usr.isLocked ? 'text-green-500' : 'text-red-500'}">
-                        <i class="fa-solid ${usr.isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
-                    </button>`;
+                        <div>
+                            <div class="font-bold ${usr.isLocked ? 'text-red-500' : 'text-white'}">${u}</div>
+                            <div class="text-gray-500">${usr.balance.toLocaleString()}đ</div>
+                        </div>
+                        <button onclick="toggleLock('${u}', ${!usr.isLocked})" class="${usr.isLocked ? 'text-green-500' : 'text-red-500'}">
+                            <i class="fa-solid ${usr.isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
+                        </button>`;
         el.appendChild(dv);
     });
 }
