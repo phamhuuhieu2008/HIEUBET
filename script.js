@@ -163,8 +163,13 @@ function startTimer() {
 
     timerInterval = setInterval(async () => {
         // Gửi kèm username để server trả về số dư mới nhất
-        const res = await fetchData(`/api/game-state?username=${currentUser}`);
-        if (!res || !res.success) return; // Đảm bảo API trả về thành công
+        const res = await fetchData(`/api/game-state?username=${currentUser || ""}`);
+
+        // Nếu server chưa sẵn sàng, chỉ log cảnh báo chứ không dừng loop
+        if (!res || !res.success) {
+            console.warn("⏳ Đang kết nối lại với server...");
+            return;
+        }
 
         // Tự động cập nhật số dư nếu Admin vừa duyệt nạp tiền
         if (res.balance !== null && res.balance !== balance) {
@@ -259,8 +264,11 @@ function updateBetPreview() {
     previewXiu.classList.toggle('hidden', selectedSide !== 'left' || amount <= 0);
     previewTai.classList.toggle('hidden', selectedSide !== 'right' || amount <= 0);
 
-    if (selectedSide === 'left') previewXiu.textContent = `${amount.toLocaleString()}đ`;
-    if (selectedSide === 'right') previewTai.textContent = `${amount.toLocaleString()}đ`;
+    if (selectedSide === 'left' && amount > 0) {
+        previewXiu.textContent = `${amount.toLocaleString()}đ`;
+    } else if (selectedSide === 'right' && amount > 0) {
+        previewTai.textContent = `${amount.toLocaleString()}đ`;
+    }
 }
 
 async function placeBet() {
