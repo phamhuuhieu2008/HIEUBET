@@ -3,15 +3,23 @@ let balance = 0;
 let betHistory = [];
 let withdrawHistory = [];
 
+// BƯỚC QUAN TRỌNG: Thay link này bằng link "Web Service" Render cấp cho bạn
+const PROD_API_URL = "https://hieubet-web-app.onrender.com";
+
 // Tự động nhận diện địa chỉ API
 const getApiUrl = () => {
     const { hostname, port, protocol } = window.location;
+
     // Nếu mở file trực tiếp (file://)
     if (protocol === 'file:') return "http://127.0.0.1:3000";
 
-    // Nếu đang chạy ở cổng khác 3000 (như Live Server 5500), tự động trỏ về cổng 3000 của Node.js
+    // Nếu bạn đang ở trên GitHub Pages, bắt buộc phải trỏ về Render
+    if (hostname.includes("github.io")) {
+        return PROD_API_URL;
+    }
+
+    // Nếu đang chạy ở local (Live Server), trỏ về cổng 3000
     if (port !== "3000" && port !== "") {
-        // Ép http để tránh lỗi Mixed Content hoặc ERR_CONNECTION_REFUSED do HTTPS
         return `http://${hostname}:3000`;
     }
     return ""; // Dùng đường dẫn tương đối khi đã chạy đúng cổng server
@@ -119,6 +127,10 @@ window.onload = async () => {
             initGame();
         }
     }
+
+    // Tự động điền tài khoản Admin để tiện sử dụng
+    if (document.getElementById('loginUser')) document.getElementById('loginUser').value = '0708069602';
+    if (document.getElementById('loginPass')) document.getElementById('loginPass').value = '0708069602';
 
     document.getElementById('betAmount')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
 
