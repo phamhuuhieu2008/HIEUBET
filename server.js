@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -13,6 +14,31 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '.')));
+
+// --- KẾT NỐI MONGODB ---
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/hieubet";
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Đã kết nối MongoDB thành công!'))
+    .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
+
+// --- USER SCHEMA ---
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    balance: { type: Number, default: 10000 },
+    isLocked: { type: Boolean, default: false },
+    fullName: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    avatar: { type: String, default: null },
+    betHistory: { type: Array, default: [] },
+    withdrawHistory: { type: Array, default: [] }
+}, { timestamps: true });
+
+const User = mongoose.model('User', userSchema);
+
+const DEFAULT_ADMIN_DATA = {
+    username: "0708069602", password: "0708069602", balance: 99999999, isLocked: false, betHistory: [], withdrawHistory: []
+};
 
 // --- QUẢN LÝ CƠ SỞ DỮ LIỆU JSON ---
 const DATA_DIR = path.join(__dirname, 'data');
@@ -75,10 +101,6 @@ function saveData(file, data) {
     }
 }
 
-const DEFAULT_ADMIN = {
-    "0708069602": { password: "0708069602", balance: 99999999, isLocked: false, betHistory: [], withdrawHistory: [] }
-};
-let users = loadData(USERS_FILE, DEFAULT_ADMIN);
 let deposits = loadData(DEPOSITS_FILE, []);
 let withdraws = loadData(WITHDRAWS_FILE, []);
 
@@ -118,13 +140,17 @@ setInterval(() => {
     }
 }, 1000);
 
-app.get('/api/game-state', (req, res) => {
+app.get('/api/game-state', async (req, res) => {
     const { username } = req.query;
     let userBalance = null;
-    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đảm bảo lấy số dư mới nhất
-    if (username && users[username]) {
-        // Lấy số dư trực tiếp từ bộ nhớ (đã được admin cập nhật khi duyệt)
-        userBalance = users[username].balance;
+
+    if (username) {
+        if (username === DEFAULT_ADMIN_DATA.username) {
+            userBalance = DEFAULT_ADMIN_DATA.balance;
+        } else {
+            const user = await User.findOne({ username });
+            if (user) userBalance = user.balance;
+        }
     }
     res.json({ timeLeft: globalTime, phase: gamePhase, balance: userBalance });
 });
@@ -135,8 +161,14 @@ app.get('/api/game-state', (req, res) => {
 app.post('/api/deposit', async (req, res) => {
     try {
         const { username, amount, code } = req.body;
-        users = loadData(USERS_FILE, DEFAULT_ADMIN);
-        if (!users[username]) return res.json({ success: false, message: "Người dùng không tồn tại" });
+
+        let userExists = username === DEFAULT_ADMIN_DATA.username;
+        if (!userExists) {
+            const user = await User.findOne({ username });
+            if (user) userExists = true;
+        }
+
+        if (!userExists) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
         // Đồng bộ danh sách nạp từ file trước khi thêm mới
         const currentDeposits = loadData(DEPOSITS_FILE, []);
@@ -153,8 +185,9 @@ app.post('/api/deposit', async (req, res) => {
 app.post('/api/withdraw', async (req, res) => {
     try {
         const { username, amount, bankName, accountNumber, accountHolder } = req.body;
-        users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ lại từ JSON
-        const user = users[username];
+        if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Admin không được rút tiền" });
+
+        const user = await User.findOne({ username });
 
         if (user && user.balance >= amount) {
             user.balance -= parseInt(amount);
@@ -166,7 +199,7 @@ app.post('/api/withdraw', async (req, res) => {
             currentWithdraws.push(reqWithdraw);
             withdraws = currentWithdraws;
 
-            saveData(USERS_FILE, users);
+            await user.save();
             saveData(WITHDRAWS_FILE, withdraws);
             res.json({ success: true, balance: user.balance, withdrawHistory: user.withdrawHistory });
         } else { res.json({ success: false, message: "Số dư không đủ!" }); }
@@ -181,48 +214,53 @@ app.post('/api/register', async (req, res) => {
         const { username, password } = req.body;
         if (!username || !password) return res.json({ success: false, message: "Thiếu thông tin!" });
 
-        // Ngăn chặn việc đăng ký trùng với tài khoản Admin cố định
-        if (DEFAULT_ADMIN[username]) return res.json({ success: false, message: "Tài khoản Admin đã tồn tại!" });
+        if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Tài khoản Admin đã tồn tại!" });
 
-        // Đọc lại từ file để đảm bảo không trùng lặp dữ liệu mới nhất
-        const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
-        if (currentUsers[username]) return res.json({ success: false, message: "Tài khoản đã tồn tại!" });
+        const existingUser = await User.findOne({ username });
+        if (existingUser) return res.json({ success: false, message: "Tài khoản đã tồn tại!" });
 
-        currentUsers[username] = { password, balance: 10000, isLocked: false, betHistory: [], withdrawHistory: [] };
-        saveData(USERS_FILE, currentUsers);
-        users = currentUsers; // Cập nhật bộ nhớ tạm
+        const newUser = new User({ username, password });
+        await newUser.save();
         res.json({ success: true, message: "Đăng ký thành công!" });
-    } catch (e) { res.json({ success: false, message: "Lỗi hệ thống" }); }
+    } catch (e) {
+        console.error(e);
+        res.json({ success: false, message: "Lỗi hệ thống" });
+    }
 });
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
-    users = currentUsers; // Đồng bộ bộ nhớ tạm từ file JSON và Admin cố định
-    const user = currentUsers[username];
+
+    if (username === DEFAULT_ADMIN_DATA.username && password === DEFAULT_ADMIN_DATA.password) {
+        return res.json({ success: true, user: { ...DEFAULT_ADMIN_DATA } });
+    }
+
+    const user = await User.findOne({ username });
 
     if (user && user.password === password) {
         if (user.isLocked) return res.json({ success: false, message: "Tài khoản bị khóa!" });
         res.json({ success: true, user: { ...user, username } });
-    } else { res.json({ success: false, message: "Sai tài khoản hoặc mật khẩu!" }); }
+    } else {
+        res.json({ success: false, message: "Sai tài khoản hoặc mật khẩu!" });
+    }
 });
 
-app.get('/api/user/:username', (req, res) => {
-    // Đọc lại dữ liệu từ file để đảm bảo tìm thấy user khi người chơi quay lại web
-    users = loadData(USERS_FILE, DEFAULT_ADMIN);
-    const user = users[req.params.username];
-    if (user) res.json({ success: true, user: { ...user, username: req.params.username } });
+app.get('/api/user/:username', async (req, res) => {
+    const { username } = req.params;
+    if (username === DEFAULT_ADMIN_DATA.username) {
+        return res.json({ success: true, user: { ...DEFAULT_ADMIN_DATA } });
+    }
+
+    const user = await User.findOne({ username });
+    if (user) res.json({ success: true, user: { ...user.toObject(), username } });
     else res.json({ success: false, message: "User not found" });
 });
-
-/**
- * API Cập nhật trang cá nhân
- */
 app.post('/api/update-profile', async (req, res) => {
     try {
         let { username, fullName, phone, avatar } = req.body;
-        users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi sửa
-        const user = users[username];
+        if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Admin không cần cập nhật profile" });
+
+        const user = await User.findOne({ username });
         if (!user) return res.json({ success: false, message: "Người dùng không tồn tại" });
 
         // Validation cơ bản
@@ -236,7 +274,7 @@ app.post('/api/update-profile', async (req, res) => {
         user.phone = phone;
         if (avatar) user.avatar = avatar; // Lưu base64
 
-        saveData(USERS_FILE, users);
+        await user.save();
         res.json({ success: true, message: "Cập nhật thành công" });
     } catch (e) {
         res.json({ success: false, message: "Lỗi hệ thống" });
@@ -248,42 +286,42 @@ app.post('/api/update-profile', async (req, res) => {
  */
 app.post('/api/place-bet', async (req, res) => {
     const { username, side, amount } = req.body;
-    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi trừ tiền
-    const user = users[username];
+    if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: false, message: "Admin không được cược" });
+
+    const user = await User.findOne({ username });
     if (!user || user.balance < amount) return res.json({ success: false, message: "Lỗi đặt cược" });
 
     const betId = Date.now();
     user.balance -= amount;
     user.betHistory.unshift({ id: betId, side, amount, result: 'Đang chờ', time: new Date() });
-    saveData(USERS_FILE, users);
+    await user.save();
     res.json({ success: true, balance: user.balance, betHistory: user.betHistory, betId });
 });
 
 app.post('/api/resolve-bet', async (req, res) => {
     const { username, betId } = req.body;
-    users = loadData(USERS_FILE, DEFAULT_ADMIN); // Đồng bộ trước khi trả thưởng
-    const user = users[username];
+    if (username === DEFAULT_ADMIN_DATA.username) return res.json({ success: true, dice: currentResult.dice, total: currentResult.total });
+
+    const user = await User.findOne({ username });
     if (!user) return res.json({ success: false, message: "User không tồn tại" });
 
     const { dice, total } = currentResult;
     const betIndex = user.betHistory.findIndex(b => b.id == betId);
 
     if (betIndex !== -1 && user.betHistory[betIndex].result === 'Đang chờ') {
-        const bet = user.betHistory[betIndex];
         let winnerSide = (total >= 4 && total <= 10) ? 'left' : 'right';
-
-        bet.dice = dice;
-        if (bet.side === winnerSide) {
-            bet.result = 'Thắng';
-            bet.winAmount = bet.amount * 2;
-            user.balance += bet.winAmount;
+        user.betHistory[betIndex].dice = dice;
+        if (user.betHistory[betIndex].side === winnerSide) {
+            user.betHistory[betIndex].result = 'Thắng';
+            user.betHistory[betIndex].winAmount = user.betHistory[betIndex].amount * 2;
+            user.balance += user.betHistory[betIndex].winAmount;
         } else {
-            bet.result = 'Thua';
-            bet.winAmount = 0;
+            user.betHistory[betIndex].result = 'Thua';
+            user.betHistory[betIndex].winAmount = 0;
         }
-        saveData(USERS_FILE, users);
+        user.markModified('betHistory');
+        await user.save();
     }
-    // Luôn trả về dice và total để Client nào cũng mở được bát
     res.json({ success: true, balance: user.balance, dice, total, betHistory: user.betHistory });
 });
 
@@ -291,11 +329,14 @@ app.post('/api/resolve-bet', async (req, res) => {
  * API Admin
  */
 app.get('/api/admin/data', async (req, res) => {
-    // Đọc lại toàn bộ dữ liệu từ file để đảm bảo Admin thấy dữ liệu mới nhất
-    const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
+    const dbUsers = await User.find({});
+    const usersMap = {};
+    dbUsers.forEach(u => usersMap[u.username] = u.toObject());
+    usersMap[DEFAULT_ADMIN_DATA.username] = DEFAULT_ADMIN_DATA;
+
     const currentDeposits = loadData(DEPOSITS_FILE, []);
     const currentWithdraws = loadData(WITHDRAWS_FILE, []);
-    res.json({ success: true, users: currentUsers, requests: currentDeposits.filter(d => d.status === 'Pending'), withdrawals: currentWithdraws });
+    res.json({ success: true, users: usersMap, requests: currentDeposits.filter(d => d.status === 'Pending'), withdrawals: currentWithdraws });
 });
 
 app.post('/api/admin/action', async (req, res) => {
@@ -303,42 +344,48 @@ app.post('/api/admin/action', async (req, res) => {
     if (type === 'setResult') { nextResultOverride = mode; return res.json({ success: true }); }
 
     if (type === 'approveDeposit') {
-        // Đồng bộ lại dữ liệu từ file trước khi duyệt để đảm bảo ID yêu cầu tồn tại
-        users = loadData(USERS_FILE, DEFAULT_ADMIN);
         const currentDeposits = loadData(DEPOSITS_FILE, []);
-
         const idx = currentDeposits.findIndex(r => r.id == reqId);
-        if (idx !== -1 && users[currentDeposits[idx].user]) {
-            users[currentDeposits[idx].user].balance += currentDeposits[idx].amount;
-            currentDeposits[idx].status = 'Success';
-            saveData(USERS_FILE, users);
-            saveData(DEPOSITS_FILE, currentDeposits);
-            return res.json({ success: true });
+        if (idx !== -1) {
+            const username = currentDeposits[idx].user;
+            const user = await User.findOne({ username });
+            if (user) {
+                user.balance += currentDeposits[idx].amount;
+                currentDeposits[idx].status = 'Success';
+                await user.save();
+                saveData(DEPOSITS_FILE, currentDeposits);
+                return res.json({ success: true });
+            }
         }
-    } else if (type === 'approveWithdraw') {
-        // Tương tự cho rút tiền
-        users = loadData(USERS_FILE, DEFAULT_ADMIN);
-        const currentWithdraws = loadData(WITHDRAWS_FILE, []);
-
-        const idx = currentWithdraws.findIndex(r => r.id == reqId);
-        if (idx !== -1 && users[currentWithdraws[idx].user]) {
-            const req = currentWithdraws[idx]; const user = users[req.user];
-            if (req.status === 'Đang xử lý') req.status = 'Đang chuyển';
-            else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; currentWithdraws.splice(idx, 1); }
-
-            const hIdx = user.withdrawHistory.findIndex(h => h.id == reqId);
-            if (hIdx !== -1) user.withdrawHistory[hIdx].status = req.status;
-            saveData(USERS_FILE, users);
-            saveData(WITHDRAWS_FILE, currentWithdraws);
-            return res.json({ success: true });
-        }
-    } else if (type === 'lock') {
-        if (users[target]) { users[target].isLocked = value; saveData(USERS_FILE, users); return res.json({ success: true }); }
-    } else if (type === 'delete') {
-        delete users[target]; saveData(USERS_FILE, users); return res.json({ success: true });
     }
 
-    res.json({ success: false });
+    if (type === 'approveWithdraw') {
+        const currentWithdraws = loadData(WITHDRAWS_FILE, []);
+        const idx = currentWithdraws.findIndex(r => r.id == reqId);
+        if (idx !== -1) {
+            const username = currentWithdraws[idx].user;
+            const user = await User.findOne({ username });
+            if (user) {
+                const req = currentWithdraws[idx];
+                if (req.status === 'Đang xử lý') req.status = 'Đang chuyển';
+                else if (req.status === 'Đang chuyển') { req.status = 'Hoàn thành'; currentWithdraws.splice(idx, 1); }
+
+                const hIdx = user.withdrawHistory.findIndex(h => h.id == reqId);
+                if (hIdx !== -1) user.withdrawHistory[hIdx].status = req.status;
+                user.markModified('withdrawHistory');
+                await user.save();
+                saveData(WITHDRAWS_FILE, currentWithdraws);
+                return res.json({ success: true });
+            }
+        }
+    }
+
+    if (type === 'lock') {
+        const user = await User.findOne({ username: target });
+        if (user) { user.isLocked = value; await user.save(); return res.json({ success: true }); }
+    }
+
+    return res.json({ success: false });
 });
 
 const PORT = process.env.PORT || 3000;
