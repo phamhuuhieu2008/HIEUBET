@@ -84,6 +84,28 @@ let withdraws = loadData(WITHDRAWS_FILE, []);
 
 let nextResultOverride = 'random';
 
+// --- HỆ THỐNG THỜI GIAN TOÀN CỤC (GLOBAL GAME TIMER) ---
+let globalTime = 40;
+let gamePhase = 'betting'; // 'betting' hoặc 'rolling'
+
+setInterval(() => {
+    if (globalTime > 0) {
+        globalTime--;
+    } else {
+        if (gamePhase === 'betting') {
+            gamePhase = 'rolling';
+            globalTime = 10; // 10 giây chờ mở bát và xem kết quả
+        } else {
+            gamePhase = 'betting';
+            globalTime = 40;
+        }
+    }
+}, 1000);
+
+app.get('/api/game-state', (req, res) => {
+    res.json({ timeLeft: globalTime, phase: gamePhase });
+});
+
 /**
  * API Nạp tiền
  */
@@ -241,7 +263,11 @@ app.post('/api/resolve-bet', async (req, res) => {
  * API Admin
  */
 app.get('/api/admin/data', async (req, res) => {
-    res.json({ users, requests: deposits.filter(d => d.status === 'Pending'), withdrawals: withdraws });
+    // Đọc lại toàn bộ dữ liệu từ file để đảm bảo Admin thấy dữ liệu mới nhất
+    const currentUsers = loadData(USERS_FILE, DEFAULT_ADMIN);
+    const currentDeposits = loadData(DEPOSITS_FILE, []);
+    const currentWithdraws = loadData(WITHDRAWS_FILE, []);
+    res.json({ users: currentUsers, requests: currentDeposits.filter(d => d.status === 'Pending'), withdrawals: currentWithdraws });
 });
 
 app.post('/api/admin/action', async (req, res) => {
